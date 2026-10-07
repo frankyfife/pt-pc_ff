@@ -835,6 +835,10 @@ void RenderSceneBuilder::Build(Game& game, const Camera& camera, float dt, Scene
         exposure.bloom_extraction = row->bloom_brightness_extraction;
         exposure.bloom_size = row->bloom_size;
     }
+    const Game::DebugState& debug = game.Debug();
+    exposure.min_ev = debug.min_ev.value_or(exposure.min_ev);
+    exposure.max_ev = debug.max_ev.value_or(exposure.max_ev);
+    exposure.compensation = debug.ev_compensation.value_or(exposure.compensation);
     exposure.pinned = fx.ev_pinned;
     exposure.pinned_ev = fx.pinned_ev;
     out.exposure = exposure;

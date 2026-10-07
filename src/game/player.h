@@ -144,8 +144,16 @@ public:
     int foot_steps = 0;
     int sounding_steps = 0;
     std::vector<uint64_t> anim_sounds;
+    /* the debug switches (PtDebug, docs/lua_api.md), all off in play: the feet held at a height (the hover), no gravity, no
+       collision (which also means no gravity), no input, and the walk speed as a factor of the parameter table's */
+    std::optional<float> hold_height;
+    bool gravity = true;
+    bool collision = true;
+    bool takes_input = true;
+    float walk_speed = 1.0f;
 
 private:
+    void MoveBody(const CollisionWorld& world, const glm::vec3& offset, float dt, float gravity_dt);
     void UpdateLocomotion(const InputState& input);
     void UpdateLook(float dt, const InputState& input, const PlayerFrameContext& context);
     void UpdateZoom(float dt, const PlayerFrameContext& context);

@@ -174,6 +174,29 @@ table or function is logged as `script: <table>.Exec failed or missing` (or `OnM
 | `Raycast(height)` | casts 5 m forward from the player's feet raised by `height` (default 1) and logs the hit |
 | `DumpCollision(path)` | writes the active collision triangles, traps, connectors and surfaces to a text file |
 | `Surface()` | logs the surface material under the player |
+| `GetStatus()` | a table: `floor` (name), `floorIndex`, `loop`, `step` and `requestedStep` (the game controller's), `frame`, `time`, `paused`, `streetWalk`, `gamePlus`, `demoSpeed` and `demos` (the ids of the demos playing) |
+| `GetStages()` | an array of the loaded stages, the resident package included: `label`, `id`, `package`, `active`, `resident`, `origin` (the stage's world position, a table with `x`, `y`, `z`) |
+| `GetPlayer()` | a table: the feet `x`, `y`, `z`; `yaw` and `pitch` of the view in radians (`yaw` 0 looks along -z); `foxYaw`, the body's; `eye` (`x`, `y`, `z`); `spawned`, `grounded`, `verticalVelocity`, `handyLight` (on or off); and the debug switches below: `hover` (only while one is held), `gravity`, `collision`, `input`, `walkSpeed` |
+| `SetPlayerPosition(x, y, z, yaw)` | puts the feet at that point; `yaw` (radians, as `GetPlayer` gives it) is optional and the view keeps its direction without it. During a hover the hover moves to the new height |
+| `SetPlayerRotation(yaw, pitch)` | turns the view (radians); `pitch` is optional and is kept within the game's limits, 70° up and 55° down |
+| `SetHover(height)` | holds the feet at `height` (the hover above the floor): walking moves only across. `true` holds the current height, `nil` or `false` lets go, and the player falls back to the floor |
+| `SetGravity(on)` | `false`: the player no longer falls (walking off an edge keeps the height); stairs and floors still push up |
+| `SetCollision(on)` | `false`: walls and floors no longer stop the player, and gravity is off while collision is off. Below y = -70 (anywhere but the street) Lisa takes the player, as she does without this switch |
+| `SetPlayerInput(on)` | `false`: the player ignores the pad, keyboard and mouse and stands still, for example while `SetCamera` holds the view |
+| `SetWalkSpeed(factor)` | the walk speed as a factor of the parameter table's (`moveSpeedRate` in `ShParameterTables.lua`), 0.05 to 20; 1 is the original's |
+| `GetHandyLight()` | the flashlight's values under the names `ShParameterTables.lua` uses (`innerRange`, `outerRange`, `temperature`, `lumen`, `lightSize`, `umbraAngle`, `penumbraAngle`, `attenuationExponent`, `dimmer`, `powerScale`, `color` with `r`, `g`, `b`), plus `floorTint` (the colour a floor gives the light, f160's roll for one), `enable`, and `changed` (whether `SetHandyLight` changed it) |
+| `SetHandyLight(table)` | changes the values given in `table`, same names as `GetHandyLight`; the others stay. `enable` switches the light on or off. Applies from the next frame |
+| `ResetHandyLight()` | the values before the first `SetHandyLight` |
+| `GetExposure()` | `row` (the lighting row of the floor), `min`, `max` and `compensation` (EV, with the overrides applied), `floor` (the row's own three), `overridden`, and `ev` while the exposure is pinned |
+| `SetExposure(table)` | overrides `min`, `max` and `compensation` (EV) of every floor: a number sets one, `false` gives it back to the floor; `ev` pins the exposure at that EV, `false` releases the pin. `SetExposure(nil)` drops the three overrides |
+| `GetCamera()` | the camera the frame is drawn from: `x`, `y`, `z`, `yaw`, `pitch`, `roll` (radians), `fov` (degrees, vertical), `forward` (`x`, `y`, `z`), and `held` (whether `SetCamera` holds it) |
+| `SetCamera(table)` | holds the view at a camera of its own, detached from the player, demos included: `x`, `y`, `z`, `yaw`, `pitch` (within ±1.55), `roll`, `fov` (5 to 150 degrees); a missing value stays as the current view has it. `body = false` hides the player's body (shown by default). `SetCamera(nil)` gives the view back. The free camera (F6) and the photo mode (F7) take over the view while they run and give it back to the player when they end; `SetCamera` takes it again |
+| `SetDemoSpeed(factor)` | the playback speed of demos, 0 (stopped, the picture holds) to 16; returns the speed before. Sound that is already playing is not paused |
+| `SessionState()` | the text the walkthrough tests compare (`sstate`): floor, loop, puzzles, gimmicks and more |
+
+The debug switches stay as set until they are changed again or the game is closed; a new game session does not reset them.
+They are reached from a replaced game script or from the command line, for example
+`pt --lua "600:PtDebug.SetHover(1.0)" --lua "600:PtDebug.SetWalkSpeed(2)"` (each `--lua` runs at that frame).
 
 ### Entities
 
