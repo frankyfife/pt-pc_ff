@@ -144,7 +144,7 @@ const std::vector<std::string>& CommandList() {
         "demospeed <factor>",
         "entity <stage> <name>",
         "entity <stage> <name> <enable|visible|geom> on|off ...",
-        "entities <stage> [prefix] [limit]",
+        "entities <stage> [prefix|*] [limit]",
         "floor <name>",
         "loop <index>|<floor> [pass]",
     };

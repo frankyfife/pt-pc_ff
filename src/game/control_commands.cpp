@@ -281,7 +281,8 @@ Reply Entities(Game& game, const WordList& w) {
         limit = static_cast<size_t>(*value);
     }
     JsonWriter out;
-    if (!debug::DescribeEntities(game, w[1], w.size() >= 3 ? w[2] : std::string_view(), std::min<size_t>(limit, 20000), out)) {
+    const std::string_view prefix = w.size() >= 3 && w[2] != "*" ? w[2] : std::string_view();
+    if (!debug::DescribeEntities(game, w[1], prefix, std::min<size_t>(limit, 20000), out)) {
         return Error("no stage '" + std::string(w[1]) + "' (stages lists them)");
     }
     return {true, out.Text()};

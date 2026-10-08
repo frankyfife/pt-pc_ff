@@ -97,7 +97,7 @@ field of view is in degrees, vertical. Switches are `on` or `off` (or `1`/`0`, `
 | `demospeed <factor>` | demo playback speed, 0 (the picture holds) to 16; sound already playing is not paused | `status` |
 | `entity <stage> <name>` | | the entity: `stage`, `name` (full), `class`, `enable`, `visible`, `geom`, `position`; `err` when not found |
 | `entity <stage> <name> <enable\|visible\|geom> on\|off ...` | sets the body's flags as a stage script does: `visible` shows or hides, `geom` its collision, `enable` turns traps and other logic on or off | the entity |
-| `entities <stage> [prefix] [limit]` | | the entities whose short name starts with `prefix`, at most `limit` (default 500) |
+| `entities <stage> [prefix\|*] [limit]` | | the entities whose short name starts with `prefix` (`*` for all), at most `limit` (default 500, at most 20000) |
 | `floor <name>` | makes `name` the current floor in the floor table (`f000` ... `f160`, `ending`), as `GameFloorLevel.SetFloorLevel` does; it takes effect at the next floor change | `status` |
 | `loop <index>` / `loop <floor> [pass]` | the loop browser: index 0 to 17, or the floor (`f050` with pass 1 or 2, `ending`, `street`). Only in play, in the ending and on the street walk, and in a release build only for loops already unlocked | `status` |
 

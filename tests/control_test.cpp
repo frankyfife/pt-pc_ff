@@ -193,7 +193,7 @@ void TestParsing() {
     Check(off && !*off && two && *two && **two == 2.0f && !control::ParseNumberOrOff("x"), "number or off");
 
     bool listed = true;
-    for (const char* name : {"status", "place <x> <y> <z> [yaw]", "hover <height>|here|off", "camera off", "entities <stage> [prefix] [limit]"}) {
+    for (const char* name : {"status", "place <x> <y> <z> [yaw]", "hover <height>|here|off", "camera off", "entities <stage> [prefix|*] [limit]"}) {
         bool found = false;
         for (const std::string& command : control::CommandList()) found = found || command == name;
         listed = listed && found;
