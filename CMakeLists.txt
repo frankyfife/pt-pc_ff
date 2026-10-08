@@ -310,3 +310,8 @@ target_link_libraries(pt_platform_test PRIVATE pt_engine)
 add_executable(pt_mods_test tests/mods_test.cpp)
 target_link_libraries(pt_mods_test PRIVATE pt_engine)
 
+# the control channel for tools (docs/control.md): the server over a loopback connection, the command parsing and the JSON;
+# no game files needed
+add_executable(pt_control_test tests/control_test.cpp)
+target_link_libraries(pt_control_test PRIVATE pt_engine)
+

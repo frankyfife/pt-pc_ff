@@ -130,6 +130,13 @@ int main(int argc, char** argv) {
     Check("vr resolution scale clamped", odd.vr.resolution_scale == 2.0f);
     Check("vr snap nan is the default", odd.vr.snap_degrees == 30.0f);
     Check("vr off by default", !pt::AppSettings{}.vr.enabled);
+    Check("control channel off by default", !pt::AppSettings{}.extras.control && pt::AppSettings{}.extras.control_port == 27510);
+    pt::AppSettings control;
+    control.extras.control = true;
+    control.extras.control_port = 30123;
+    Check("extras.control round trip", RoundTrip(ini, control).extras == control.extras);
+    control.extras.control_port = 70000;
+    Check("extras.control_port out of range is the default", RoundTrip(ini, control).extras.control_port == 27510);
     std::filesystem::remove(ini);
     std::printf("%s\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;

@@ -162,8 +162,11 @@ bool LoadAppSettings(const std::filesystem::path& path, AppSettings& out) {
     Read(v, "extras.livesplit", out.extras.livesplit);
     Read(v, "extras.livesplit_host", out.extras.livesplit_host);
     Read(v, "extras.livesplit_port", out.extras.livesplit_port);
+    Read(v, "extras.control", out.extras.control);
+    Read(v, "extras.control_port", out.extras.control_port);
     out.extras.speedrun = std::clamp(out.extras.speedrun, 0, 2);
     if (out.extras.livesplit_port <= 0 || out.extras.livesplit_port > 65535) out.extras.livesplit_port = 16834;
+    if (out.extras.control_port <= 0 || out.extras.control_port > 65535) out.extras.control_port = 27510;
     for (auto it = v.lower_bound("mods."); it != v.end() && it->first.starts_with("mods."); ++it) {
         bool enabled = true;
         Read(v, it->first.c_str(), enabled);
@@ -306,7 +309,11 @@ bool SaveAppSettings(const std::filesystem::path& path, const AppSettings& s) {
          << "; LiveSplit: send the start, the splits and the game time to its TCP server (Control > Start TCP Server)\n"
          << "livesplit = " << (s.extras.livesplit ? 1 : 0) << "\n"
          << "livesplit_host = " << s.extras.livesplit_host << "\n"
-         << "livesplit_port = " << s.extras.livesplit_port << "\n";
+         << "livesplit_port = " << s.extras.livesplit_port << "\n"
+         << "; control channel for tools such as P.T. Playground (docs/control.md): 1 listens on 127.0.0.1:control_port, a fixed\n"
+         << "; set of commands, no code; the token a tool needs is written to control.json next to pt.log at every start\n"
+         << "control = " << (s.extras.control ? 1 : 0) << "\n"
+         << "control_port = " << s.extras.control_port << "\n";
     if (!s.mods.empty()) {
         text << "\n[mods]\n"
              << "; a folder in mods/ = 1 on, 0 off; applies at the next start\n";

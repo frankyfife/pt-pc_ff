@@ -75,6 +75,9 @@ struct AppSettings {
         bool livesplit = false;
         std::string livesplit_host = "127.0.0.1";
         int livesplit_port = 16834;
+        /* the control channel for tools such as P.T. Playground (docs/control.md): 127.0.0.1 only, off by default */
+        bool control = false;
+        int control_port = 27510;
         bool operator==(const Extras&) const = default;
     } extras;
     struct Vr {

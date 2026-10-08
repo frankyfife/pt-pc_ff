@@ -111,7 +111,8 @@ scripted routes in `tests/walkthrough/` and checks the log; it is how I make sur
 The installer is `installer/`: a native C++ setup (`pt_setup`, built when a payload exists) and a small LGPL extraction
 helper in C# that reads fake PKGs with LibOrbisPkg. docs/installer.md describes how it decides what it accepts.
 
-Other docs: docs/upscaling.md, docs/vr.md, docs/updates.md, and the file format notes in docs/formats/ that came out of
+Other docs: docs/upscaling.md, docs/vr.md, docs/updates.md, docs/control.md (a local control channel for tools such as
+P.T. Playground, off by default), and the file format notes in docs/formats/ that came out of
 reverse engineering the game data, with the tools in tools/ that read those formats.
 
 ## Thanks
