@@ -299,7 +299,8 @@ void Game::Update(float dt, const InputState& pad_input) {
         context.invert_y = options_.invert_y;
         context.peephole_theater = nazo_.IsPeepholeTheaterActive();
         if (!demo_control) {
-            player_.Update(dt, input, collision_, context);
+            static const InputState kNoInput;
+            player_.Update(dt, player_.takes_input ? input : kNoInput, collision_, context);
             // the camera plugin's zoom-out branch (0x984A62) calls AbortPeephole once in every game frame the zoom falls; the
             // port's zoom runs per tick, so a fall in either tick of the frame aborts once, on the next frame tick
             zoom_fell_ = zoom_fell_ || player_.ZoomFalling();

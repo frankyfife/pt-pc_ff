@@ -1,7 +1,13 @@
+#include <algorithm>
+#include <cmath>
 #include <fstream>
+#include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "engine/core/log.h"
+#include "game/debug_control.h"
 #include "game/game.h"
 #include "game/lua_entity.h"
 #include "game/script_host.h"
@@ -460,6 +466,264 @@ int DebugRaycast(lua_State* L) {
     return 0;
 }
 
+/* PtDebug: the port's own debug functions (docs/lua_api.md, PtDebug). What they read and change is in game/debug_control,
+   which the control channel's commands (docs/control.md) use too. */
+
+class LuaFieldWriter : public debug::FieldWriter {
+public:
+    explicit LuaFieldWriter(lua_State* L) : L_(L) {}
+    void Number(const char* key, double value) override {
+        lua_pushnumber(L_, value);
+        Put(key);
+    }
+    void Bool(const char* key, bool value) override {
+        lua_pushboolean(L_, value);
+        Put(key);
+    }
+    void String(const char* key, std::string_view value) override {
+        lua_pushlstring(L_, value.data(), value.size());
+        Put(key);
+    }
+    void BeginObject(const char* key) override { Begin(key, false); }
+    void BeginArray(const char* key) override { Begin(key, true); }
+    void End() override {
+        const Frame frame = frames_.back();
+        frames_.pop_back();
+        Put(frame.key);
+    }
+
+private:
+    struct Frame {
+        const char* key = nullptr;
+        bool array = false;
+        int count = 0;
+    };
+    void Begin(const char* key, bool array) {
+        lua_checkstack(L_, 4);
+        lua_newtable(L_);
+        frames_.push_back({key, array, 0});
+    }
+    /* the value on top goes into the open table; the outermost value stays on the stack */
+    void Put(const char* key) {
+        if (frames_.empty()) {
+            return;
+        }
+        Frame& parent = frames_.back();
+        if (parent.array) {
+            lua_rawseti(L_, -2, ++parent.count);
+        } else {
+            lua_setfield(L_, -2, key);
+        }
+    }
+    lua_State* L_;
+    std::vector<Frame> frames_;
+};
+
+int Describe(lua_State* L, void (*describe)(Game&, debug::FieldWriter&)) {
+    LuaFieldWriter out(L);
+    describe(G(L), out);
+    return 1;
+}
+
+float CheckFloat(lua_State* L, int index) {
+    const double value = luaL_checknumber(L, index);
+    if (!std::isfinite(value)) {
+        luaL_argerror(L, index, "not a finite number");
+    }
+    return static_cast<float>(value);
+}
+
+std::optional<float> OptFloat(lua_State* L, int index) {
+    if (lua_isnoneornil(L, index)) {
+        return std::nullopt;
+    }
+    return CheckFloat(L, index);
+}
+
+bool FieldNumber(lua_State* L, int table, const char* key, float& out) {
+    lua_getfield(L, table, key);
+    const bool found = lua_type(L, -1) == LUA_TNUMBER && std::isfinite(lua_tonumber(L, -1));
+    if (found) {
+        out = static_cast<float>(lua_tonumber(L, -1));
+    }
+    lua_pop(L, 1);
+    return found;
+}
+
+int DebugGetStatus(lua_State* L) {
+    return Describe(L, debug::DescribeStatus);
+}
+
+int DebugGetStages(lua_State* L) {
+    return Describe(L, debug::DescribeStages);
+}
+
+int DebugGetEntities(lua_State* L) {
+    LuaFieldWriter out(L);
+    const lua_Number limit = luaL_optnumber(L, 3, 500.0);
+    if (!debug::DescribeEntities(G(L), Str(L, 1), Str(L, 2), limit > 0.0 ? static_cast<size_t>(limit) : 0, out)) {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+int DebugGetPlayer(lua_State* L) {
+    return Describe(L, debug::DescribePlayer);
+}
+
+int DebugSetPlayerPosition(lua_State* L) {
+    const glm::vec3 feet(CheckFloat(L, 1), CheckFloat(L, 2), CheckFloat(L, 3));
+    debug::PlacePlayer(G(L), feet, OptFloat(L, 4));
+    return 0;
+}
+
+int DebugSetPlayerRotation(lua_State* L) {
+    const float yaw = CheckFloat(L, 1);
+    debug::TurnPlayer(G(L), yaw, OptFloat(L, 2));
+    return 0;
+}
+
+int DebugSetHover(lua_State* L) {
+    Game& game = G(L);
+    if (lua_type(L, 1) == LUA_TNUMBER) {
+        debug::SetHover(game, CheckFloat(L, 1));
+    } else if (lua_toboolean(L, 1)) {
+        debug::SetHover(game, game.GetPlayer().Feet().y);
+    } else {
+        debug::SetHover(game, std::nullopt);
+    }
+    return 0;
+}
+
+int DebugSetGravity(lua_State* L) {
+    luaL_checkany(L, 1);
+    debug::SetGravity(G(L), lua_toboolean(L, 1) != 0);
+    return 0;
+}
+
+int DebugSetCollision(lua_State* L) {
+    luaL_checkany(L, 1);
+    debug::SetCollision(G(L), lua_toboolean(L, 1) != 0);
+    return 0;
+}
+
+int DebugSetPlayerInput(lua_State* L) {
+    luaL_checkany(L, 1);
+    debug::SetPlayerInput(G(L), lua_toboolean(L, 1) != 0);
+    return 0;
+}
+
+int DebugSetWalkSpeed(lua_State* L) {
+    debug::SetWalkSpeed(G(L), CheckFloat(L, 1));
+    return 0;
+}
+
+int DebugGetHandyLight(lua_State* L) {
+    return Describe(L, debug::DescribeHandyLight);
+}
+
+int DebugSetHandyLight(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    Game& game = G(L);
+    lua_pushnil(L);
+    while (lua_next(L, 1) != 0) {
+        if (lua_type(L, -2) == LUA_TSTRING) {
+            const std::string key = Str(L, -2);
+            if (lua_type(L, -1) == LUA_TNUMBER) {
+                debug::SetHandyLightValue(game, key, static_cast<float>(lua_tonumber(L, -1)));
+            } else if (key == "color" && lua_istable(L, -1)) {
+                const int color = lua_gettop(L);
+                for (const char* channel : {"r", "g", "b"}) {
+                    if (float value = 0.0f; FieldNumber(L, color, channel, value)) {
+                        debug::SetHandyLightValue(game, channel, value);
+                    }
+                }
+            } else if (key == "enable" && lua_isboolean(L, -1)) {
+                debug::SetHandyLightOn(game, lua_toboolean(L, -1) != 0);
+            }
+        }
+        lua_pop(L, 1);
+    }
+    return 0;
+}
+
+int DebugResetHandyLight(lua_State* L) {
+    debug::ResetHandyLight(G(L));
+    return 0;
+}
+
+int DebugGetExposure(lua_State* L) {
+    return Describe(L, debug::DescribeExposure);
+}
+
+int DebugSetExposure(lua_State* L) {
+    Game& game = G(L);
+    if (!lua_istable(L, 1)) {
+        debug::ResetExposure(game);
+        return 0;
+    }
+    for (const char* key : {"min", "max", "compensation", "ev"}) {
+        lua_getfield(L, 1, key);
+        std::optional<std::optional<float>> value;
+        if (lua_type(L, -1) == LUA_TNUMBER && std::isfinite(lua_tonumber(L, -1))) {
+            value = static_cast<float>(lua_tonumber(L, -1));
+        } else if (lua_isboolean(L, -1) && !lua_toboolean(L, -1)) {
+            value = std::optional<float>();
+        }
+        lua_pop(L, 1);
+        if (!value) {
+            continue;
+        }
+        if (std::string_view(key) == "ev") {
+            debug::PinExposure(game, *value);
+        } else {
+            debug::SetExposureOverride(game, key, *value);
+        }
+    }
+    return 0;
+}
+
+int DebugGetCamera(lua_State* L) {
+    return Describe(L, debug::DescribeCamera);
+}
+
+int DebugSetCamera(lua_State* L) {
+    Game& game = G(L);
+    if (!lua_istable(L, 1)) {
+        debug::ReleaseCamera(game);
+        return 0;
+    }
+    Camera camera = game.ViewCamera();
+    FieldNumber(L, 1, "x", camera.position.x);
+    FieldNumber(L, 1, "y", camera.position.y);
+    FieldNumber(L, 1, "z", camera.position.z);
+    FieldNumber(L, 1, "yaw", camera.yaw);
+    FieldNumber(L, 1, "pitch", camera.pitch);
+    FieldNumber(L, 1, "roll", camera.roll);
+    if (float fov = 0.0f; FieldNumber(L, 1, "fov", fov)) {
+        camera.fov_y = glm::radians(fov);
+    }
+    bool body = true;
+    lua_getfield(L, 1, "body");
+    if (lua_isboolean(L, -1)) {
+        body = lua_toboolean(L, -1) != 0;
+    }
+    lua_pop(L, 1);
+    debug::HoldCamera(game, camera, body);
+    return 0;
+}
+
+int DebugSetDemoSpeed(lua_State* L) {
+    lua_pushnumber(L, debug::SetDemoSpeed(G(L), CheckFloat(L, 1)));
+    return 1;
+}
+
+int DebugSessionState(lua_State* L) {
+    const std::string text = G(L).DescribeSessionState();
+    lua_pushlstring(L, text.data(), text.size());
+    return 1;
+}
+
 int GimmickAddPartsPath(lua_State* L) {
     G(L).Objects().AddPartsPath(TableString(L, 1, "partName"), TableString(L, 1, "path"));
     return 0;
@@ -546,7 +810,16 @@ void RegisterGameBindings(LuaVm& vm, Game& game) {
     vm.RegisterModule("ShNazoManager", nazo);
     const luaL_Reg gimmick[] = {{"AddPartsPath", GimmickAddPartsPath}, {"AddMotionPath", GimmickAddMotionPath}, {nullptr, nullptr}};
     vm.RegisterModule("Gimmick", gimmick);
-    const luaL_Reg debug[] = {{"GetEntity", DebugGetEntity}, {"Raycast", DebugRaycast}, {"DumpCollision", DebugDumpCollision}, {"Surface", DebugSurface}, {nullptr, nullptr}};
+    const luaL_Reg debug[] = {
+        {"GetEntity", DebugGetEntity}, {"Raycast", DebugRaycast}, {"DumpCollision", DebugDumpCollision}, {"Surface", DebugSurface},
+        {"GetStatus", DebugGetStatus}, {"GetStages", DebugGetStages}, {"GetEntities", DebugGetEntities}, {"GetPlayer", DebugGetPlayer},
+        {"SetPlayerPosition", DebugSetPlayerPosition}, {"SetPlayerRotation", DebugSetPlayerRotation}, {"SetHover", DebugSetHover},
+        {"SetGravity", DebugSetGravity}, {"SetCollision", DebugSetCollision}, {"SetPlayerInput", DebugSetPlayerInput},
+        {"SetWalkSpeed", DebugSetWalkSpeed}, {"GetHandyLight", DebugGetHandyLight}, {"SetHandyLight", DebugSetHandyLight},
+        {"ResetHandyLight", DebugResetHandyLight}, {"GetExposure", DebugGetExposure}, {"SetExposure", DebugSetExposure},
+        {"GetCamera", DebugGetCamera}, {"SetCamera", DebugSetCamera}, {"SetDemoSpeed", DebugSetDemoSpeed},
+        {"SessionState", DebugSessionState}, {nullptr, nullptr},
+    };
     vm.RegisterModule("PtDebug", debug);
     const luaL_Reg status[] = {{"Set", GameStatusSet}, {"Reset", GameStatusReset}, {nullptr, nullptr}};
     vm.RegisterModule("ShGameStatus", status);
