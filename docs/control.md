@@ -22,7 +22,7 @@ A run without a window (`--headless`) opens it only with `--control`.
 `pt.log` says it is listening:
 
 ```
-info  control: listening on 127.0.0.1:27510; port and token in C:\Users\you\AppData\Roaming\pt-port\pt\control.json
+info  control: listening on 127.0.0.1:27510; port and token in C:\Games\P.T. PC Port\data\control.json
 ```
 
 If the port is taken, the log says so and the game runs without the channel.
@@ -30,9 +30,10 @@ If the port is taken, the log says so and the game runs without the channel.
 ## Who can connect
 
 - Only programs on this machine: the server listens on 127.0.0.1 and nowhere else.
-- Only programs that can read `control.json`. The game writes it next to `pt.log` at every start (`%APPDATA%\pt-port\pt\`
-  on Windows, `~/.local/share/pt-port/pt/` on Linux), with a new random token, readable by this user only on Linux, and
-  removes it when the game closes:
+- Only programs that can read `control.json`. The game writes it next to `pt.log` at every start, in the `data` folder
+  next to `pt.exe` (on Windows and Linux; the macOS app uses `~/Library/Application Support/pt-port/pt/`), with a
+  new random token, readable by this user only on Linux and macOS, and removes it when the game closes. Up to 1.0.1 the
+  folder was `%APPDATA%\pt-port\pt\` (`~/.local/share/pt-port/pt/` on Linux):
 
   ```json
   {"port": 27510, "token": "9f2c...e41a", "pid": 1234}
@@ -115,7 +116,8 @@ P.T. Playground's `ptport.py` wraps all of this. Without it:
 ```python
 import json, os, socket
 
-info = json.load(open(os.path.expandvars(r"%APPDATA%\pt-port\pt\control.json")))
+PORT = r"C:\Games\P.T. PC Port"   # the folder that holds pt.exe
+info = json.load(open(os.path.join(PORT, "data", "control.json")))
 s = socket.create_connection(("127.0.0.1", info["port"]))
 f = s.makefile("rw", encoding="utf-8", newline="\n")
 
