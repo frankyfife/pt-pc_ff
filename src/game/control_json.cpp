@@ -140,7 +140,7 @@ const std::vector<std::string>& CommandList() {
         "exposure <min|max|compensation|ev> <value>|off ...",
         "camera",
         "camera off",
-        "camera <x|y|z|yaw|pitch|roll|fov> <value> ... [body on|off]",
+        "camera <x|y|z|yaw|pitch|roll|fov|vforward|vright|vup|yawrate|pitchrate> <value> ... [follow on|off] [body on|off]",
         "demospeed <factor>",
         "entity <stage> <name>",
         "entity <stage> <name> <enable|visible|geom> on|off ...",

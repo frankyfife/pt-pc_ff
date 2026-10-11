@@ -189,19 +189,40 @@ Reply CameraCommand(Game& game, const WordList& w) {
         debug::ReleaseCamera(game);
         return Describe(game, debug::DescribeCamera);
     }
+    static constexpr const char* kCameraUsage =
+        "camera <x|y|z|yaw|pitch|roll|fov|vforward|vright|vup|yawrate|pitchrate> <value> ... [follow on|off] [body on|off]";
     std::vector<std::pair<std::string_view, std::string_view>> pairs;
     if (!Pairs(w, 1, pairs)) {
-        return Usage("camera <x|y|z|yaw|pitch|roll|fov> <value> ... [body on|off]");
+        return Usage(kCameraUsage);
     }
     Camera camera = game.ViewCamera();
     bool body = true;
+    std::optional<bool> follow;
+    std::optional<glm::vec3> velocity;
+    std::optional<float> yaw_rate;
+    std::optional<float> pitch_rate;
     for (const auto& [name, text] : pairs) {
-        if (name == "body") {
+        if (name == "body" || name == "follow") {
             const auto on = ParseSwitch(text);
             if (!on) {
-                return Usage("camera ... body on|off");
+                return Usage(kCameraUsage);
             }
-            body = *on;
+            (name == "body" ? body : follow.emplace()) = *on;
+            continue;
+        }
+        if (name == "vforward" || name == "vright" || name == "vup" || name == "yawrate" || name == "pitchrate") {
+            const auto value = ParseNumber(text);
+            if (!value) {
+                return Usage(kCameraUsage);
+            }
+            if (name == "yawrate") {
+                yaw_rate = *value;
+            } else if (name == "pitchrate") {
+                pitch_rate = *value;
+            } else {
+                if (!velocity) velocity = game.Debug().camera_velocity;
+                (name == "vforward" ? velocity->x : name == "vright" ? velocity->y : velocity->z) = *value;
+            }
             continue;
         }
         const auto value = ParseNumber(text);
@@ -213,7 +234,7 @@ Reply CameraCommand(Game& game, const WordList& w) {
                       : name == "roll"  ? &camera.roll
                                         : nullptr;
         if (!value || (!slot && name != "fov")) {
-            return Usage("camera <x|y|z|yaw|pitch|roll|fov> <value> ... [body on|off]");
+            return Usage(kCameraUsage);
         }
         if (slot) {
             *slot = *value;
@@ -221,7 +242,13 @@ Reply CameraCommand(Game& game, const WordList& w) {
             camera.fov_y = glm::radians(*value);
         }
     }
+    if (!debug::SetCameraMotion(game, velocity, yaw_rate, pitch_rate)) {
+        return Error("camera: a speed or rate that is not a finite number");
+    }
     debug::HoldCamera(game, camera, body);
+    if (follow && !debug::SetCameraFollow(game, *follow)) {
+        return Error("camera follow: the player is not there");
+    }
     return Describe(game, debug::DescribeCamera);
 }
 

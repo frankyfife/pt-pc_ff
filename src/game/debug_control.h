@@ -74,6 +74,17 @@ void ResetExposure(Game& game);
 void HoldCamera(Game& game, Camera camera, bool body);
 void ReleaseCamera(Game& game);
 
+/* The held camera moves by itself, frame by frame with the frame's own time, so a tool that sets a speed once gets a
+   smooth flight however seldom it talks to the game. Velocity in metres per second along the view (forward), its level
+   right and the world's up (each within ±50); yaw and pitch rates in radians per second (within ±10). An unset value
+   stays as it is. False for a value that is not finite. */
+bool SetCameraMotion(Game& game, std::optional<glm::vec3> velocity, std::optional<float> yaw_rate, std::optional<float> pitch_rate);
+/* Follow: the camera keeps its offset to the player's eye (in the eye's axes) and looks where the player looks; the
+   velocity then moves the offset. False when the camera is not held or the player is not there. */
+bool SetCameraFollow(Game& game, bool on);
+/* Once per drawn frame (main.cpp): applies the motion and the follow to the held camera. */
+void StepCamera(Game& game, float dt);
+
 /* 0 to 16; returns the speed before */
 float SetDemoSpeed(Game& game, float factor);
 

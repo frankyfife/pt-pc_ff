@@ -302,6 +302,13 @@ public:
         std::optional<float> ev_compensation;
         std::optional<HandyLightParameters> handy_light_default;
         bool camera = false;
+        // the held camera's own motion (debug::StepCamera, once per drawn frame): metres per second along the view, its
+        // level right and the world's up, radians per second of yaw and pitch; follow is the offset to the player's eye
+        // in the eye's right, up and forward while the camera follows the player
+        glm::vec3 camera_velocity{0.0f};
+        float camera_yaw_rate = 0.0f;
+        float camera_pitch_rate = 0.0f;
+        std::optional<glm::vec3> camera_follow;
     };
     DebugState& Debug() { return debug_; }
     void CallBgm(std::string_view event);

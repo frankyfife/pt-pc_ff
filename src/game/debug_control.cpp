@@ -177,6 +177,15 @@ void DescribeCamera(Game& game, FieldWriter& out) {
     out.Number("fov", glm::degrees(camera.fov_y));
     out.Vector("forward", camera.Forward());
     out.Bool("held", game.Debug().camera);
+    const Game::DebugState& debug = game.Debug();
+    out.BeginObject("velocity");
+    out.Number("forward", debug.camera_velocity.x);
+    out.Number("right", debug.camera_velocity.y);
+    out.Number("up", debug.camera_velocity.z);
+    out.End();
+    out.Number("yawRate", debug.camera_yaw_rate);
+    out.Number("pitchRate", debug.camera_pitch_rate);
+    out.Bool("follow", debug.camera_follow.has_value());
     out.End();
 }
 
@@ -336,13 +345,68 @@ void HoldCamera(Game& game, Camera camera, bool body) {
 }
 
 void ReleaseCamera(Game& game) {
-    if (!game.Debug().camera) {
+    Game::DebugState& debug = game.Debug();
+    debug.camera_velocity = glm::vec3(0.0f);
+    debug.camera_yaw_rate = debug.camera_pitch_rate = 0.0f;
+    debug.camera_follow.reset();
+    if (!debug.camera) {
         return;
     }
     game.SetCameraOverride(std::nullopt);
     game.SetShowBody(false);
     game.SetDetachedView(false);
-    game.Debug().camera = false;
+    debug.camera = false;
+}
+
+bool SetCameraMotion(Game& game, std::optional<glm::vec3> velocity, std::optional<float> yaw_rate, std::optional<float> pitch_rate) {
+    if ((velocity && !(std::isfinite(velocity->x) && std::isfinite(velocity->y) && std::isfinite(velocity->z))) ||
+        (yaw_rate && !std::isfinite(*yaw_rate)) || (pitch_rate && !std::isfinite(*pitch_rate))) {
+        return false;
+    }
+    Game::DebugState& debug = game.Debug();
+    if (velocity) debug.camera_velocity = glm::clamp(*velocity, glm::vec3(-50.0f), glm::vec3(50.0f));
+    if (yaw_rate) debug.camera_yaw_rate = std::clamp(*yaw_rate, -10.0f, 10.0f);
+    if (pitch_rate) debug.camera_pitch_rate = std::clamp(*pitch_rate, -10.0f, 10.0f);
+    return true;
+}
+
+bool SetCameraFollow(Game& game, bool on) {
+    Game::DebugState& debug = game.Debug();
+    if (!on) {
+        debug.camera_follow.reset();
+        return true;
+    }
+    if (!debug.camera || !game.GetPlayer().spawned) {
+        return false;
+    }
+    const Camera eye = game.GetPlayer().MakeCamera();
+    const glm::vec3 d = game.ViewCamera().position - eye.position;
+    debug.camera_follow = glm::vec3(glm::dot(d, eye.Right()), glm::dot(d, eye.Up()), glm::dot(d, eye.Forward()));
+    return true;
+}
+
+void StepCamera(Game& game, float dt) {
+    Game::DebugState& debug = game.Debug();
+    const bool moving = debug.camera_velocity != glm::vec3(0.0f) || debug.camera_yaw_rate != 0.0f || debug.camera_pitch_rate != 0.0f;
+    if (!debug.camera || !(dt > 0.0f) || (!moving && !debug.camera_follow)) {
+        return;
+    }
+    Camera camera = game.ViewCamera();
+    if (debug.camera_follow) {
+        glm::vec3& offset = *debug.camera_follow;
+        offset += glm::vec3(debug.camera_velocity.y, debug.camera_velocity.z, debug.camera_velocity.x) * dt;
+        const Camera eye = game.GetPlayer().MakeCamera();
+        camera.position = eye.position + offset.x * eye.Right() + offset.y * eye.Up() + offset.z * eye.Forward();
+        camera.yaw = eye.yaw;
+        camera.pitch = eye.pitch;
+    } else {
+        camera.yaw += debug.camera_yaw_rate * dt;
+        camera.pitch = std::clamp(camera.pitch + debug.camera_pitch_rate * dt, -1.55f, 1.55f);
+        const glm::vec3 right(std::cos(camera.yaw), 0.0f, -std::sin(camera.yaw));
+        camera.position += (debug.camera_velocity.x * camera.Forward() + debug.camera_velocity.y * right +
+                            debug.camera_velocity.z * glm::vec3(0.0f, 1.0f, 0.0f)) * dt;
+    }
+    game.SetCameraOverride(camera);
 }
 
 float SetDemoSpeed(Game& game, float factor) {

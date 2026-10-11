@@ -77,6 +77,7 @@
 #include "game/archive_theater.h"
 #include "game/debug_panel.h"
 #include "game/control_commands.h"
+#include "game/debug_control.h"
 #include "game/game.h"
 #include "game/outro_input.h"
 #include "game/loop_browser.h"
@@ -4430,6 +4431,8 @@ int RunGame(App& app, pt::Vfs& vfs) {
         if (control.Listening()) {
             control.Poll([&](std::string_view line) { return pt::game::control::Run(game, line); });
         }
+        // the held camera's own motion (control channel, PtDebug): once per drawn frame, with the frame's time
+        pt::game::debug::StepCamera(game, dt);
         if (game.SavesEnabled() && (game.BrowseUnlockGeneration() != unlocks_seen || game.ArchiveGeneration() != archive_seen)) {
             unlocks_seen = game.BrowseUnlockGeneration();
             archive_seen = game.ArchiveGeneration();
