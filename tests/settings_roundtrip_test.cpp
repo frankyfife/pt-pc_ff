@@ -223,6 +223,13 @@ int main(int argc, char** argv) {
     Check("vr world_scale of an older version leaves the size at 1", LoadText(ini, "[vr]\nworld_scale = 0.5\n").vr.world_size == 1.0f);
     Check("vr world_size wins over an old world_scale", LoadText(ini, "[vr]\nworld_scale = 0.5\nworld_size = 1.25\n").vr.world_size == 1.25f);
     Check("vr world_size clamped", LoadText(ini, "[vr]\nworld_size = 9\n").vr.world_size == 2.0f);
+    Check("control channel off by default", !pt::AppSettings{}.extras.control && pt::AppSettings{}.extras.control_port == 27510);
+    pt::AppSettings control;
+    control.extras.control = true;
+    control.extras.control_port = 30123;
+    Check("extras.control round trip", RoundTrip(ini, control).extras == control.extras);
+    control.extras.control_port = 70000;
+    Check("extras.control_port out of range is the default", RoundTrip(ini, control).extras.control_port == 27510);
     std::filesystem::remove(ini);
     std::printf("%s\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;

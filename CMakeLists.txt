@@ -671,4 +671,8 @@ target_link_libraries(pt_display_policy_test PRIVATE pt_engine)
 
 add_executable(pt_pipeline_cache_store_test tests/pipeline_cache_store_test.cpp)
 target_link_libraries(pt_pipeline_cache_store_test PRIVATE pt_engine)
+# the control channel for tools (docs/control.md): the server over a loopback connection, the command parsing and the JSON;
+# no game files needed
+add_executable(pt_control_test tests/control_test.cpp)
+target_link_libraries(pt_control_test PRIVATE pt_engine)
 

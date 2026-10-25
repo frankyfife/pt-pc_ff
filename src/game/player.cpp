@@ -186,7 +186,9 @@ void Player::StepStandWalk(float m, bool left_locked) {
 
 glm::vec3 Player::FollowHead(const CollisionWorld& world, const glm::vec3& displacement) {
     const glm::vec3 before = controller.position;
-    controller.Move(world, glm::vec3(displacement.x, 0.0f, displacement.z), 0.0f, 0.0f);
+    // the debug switch for collision (MoveBody) holds here too: without it the head's follow pushes a body out of a wall
+    static const CollisionWorld kNoCollision;
+    controller.Move(collision ? world : kNoCollision, glm::vec3(displacement.x, 0.0f, displacement.z), 0.0f, 0.0f);
     UpdateEye(0.0f);
     PublishNow();
     const glm::vec3 moved = controller.position - before;
@@ -573,6 +575,22 @@ void Player::UpdateZoom(float dt, const PlayerFrameContext& context) {
     zoom_target_ = kZoomHeld;
 }
 
+/* The character controller's move with the debug switches applied: without collision the move goes through an empty world,
+   and only a body that collides and is not held falls. A held body is put back at its height after the move; the
+   controller then takes that as a new placement, so the drawn body and the eye follow at once. */
+void Player::MoveBody(const CollisionWorld& world, const glm::vec3& offset, float dt, float gravity_dt) {
+    static const CollisionWorld kNoCollision;
+    const bool falls = gravity && collision && !hold_height;
+    if (!falls) {
+        controller.vertical_velocity = 0.0f;
+    }
+    controller.Move(collision ? world : kNoCollision, offset, dt, falls ? gravity_dt : 0.0f);
+    if (hold_height) {
+        controller.position.y = *hold_height;
+        controller.vertical_velocity = 0.0f;
+    }
+}
+
 void Player::UpdateBody(float dt, const CollisionWorld& world) {
     if (!peephole_look_active_) {
         const float follow = 1.0f - std::pow(1.0f - 1.0f / kBodyTurnDivisor, dt * 299.7003f * 0.2f);
@@ -588,7 +606,7 @@ void Player::UpdateBody(float dt, const CollisionWorld& world) {
         return v && v[0] == '1';
     }();
     if (per_tick) {
-        controller.Move(world, offset, dt, frame_start_ ? kOriginalFrame : 0.0f);
+        MoveBody(world, offset, dt, frame_start_ ? kOriginalFrame : 0.0f);
         drawn_offset_ = glm::vec3(0.0f);
     } else {
         frame_offset_ += offset;
@@ -596,7 +614,7 @@ void Player::UpdateBody(float dt, const CollisionWorld& world) {
         frame_gravity_ = frame_gravity_ || frame_start_;
         if (FrameEnds()) {
             const glm::vec3 before = controller.BodyPosition();
-            controller.Move(world, frame_offset_, frame_dt_, frame_gravity_ ? kOriginalFrame : 0.0f);
+            MoveBody(world, frame_offset_, frame_dt_, frame_gravity_ ? kOriginalFrame : 0.0f);
             const glm::vec3 step = controller.BodyPosition() - before;
             drawn_offset_ = glm::dot(step, step) < 0.25f ? -0.5f * step : glm::vec3(0.0f);
             frame_offset_ = glm::vec3(0.0f);

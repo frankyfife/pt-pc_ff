@@ -34,6 +34,7 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <charconv>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -67,8 +68,10 @@
 #include "engine/platform/input.h"
 #include "engine/platform/controller_speaker.h"
 #include "engine/platform/controller_feedback.h"
+#include "engine/platform/control_server.h"
 #include "engine/platform/livesplit.h"
 #include "engine/render/intel_vulkan_driver.h"
+#include "engine/platform/os.h"
 #include "engine/render/model_cache.h"
 #include "engine/render/gpu/gpu_vk_native.h"
 #include "engine/render/renderer.h"
@@ -232,6 +235,8 @@ bool ProbeD3D12(std::string& reason) {
 #include "game/museum_music.h"
 #include "game/lisa_date/lisa_date.h"
 #include "game/debug_panel.h"
+#include "game/control_commands.h"
+#include "game/debug_control.h"
 #include "game/game.h"
 #include "game/outro_input.h"
 #include "game/loop_browser.h"
@@ -286,6 +291,7 @@ struct Options {
     int handy_light_roll = 0;
     int bug_screen = -1;
     std::vector<std::string> lua_snippets;
+    int control_port = -1;
     bool no_save = false;
     bool audio_offline = false;
     uint32_t audio_period = 0;
@@ -342,6 +348,7 @@ constexpr OptionSpec kOptionSpecs[] = {
     {"--mods", 1, "<folder> the mods folder"},
     {"--no-mods", 0, "load no mods"},
     {"--no-update-check", 0, "do not look for a newer release"},
+    {"--control", 1, "<port> the control channel for tools on 127.0.0.1 (docs/control.md); 0 takes the port from pt.ini"},
     {"--fake-update", 1, "<version> pretend this version was released (tests)"},
     {"--update-now", 0, "tests: start the in-game update as soon as one is offered (docs/updates.md)"},
     {"--vr", 0, "the experimental VR mode (an OpenXR runtime and a headset; docs/vr.md)"},
@@ -483,6 +490,12 @@ Options ParseOptions(int argc, char** argv) {
             options.input_text = argv[++i];
         } else if (arg == "--lua" && has_value) {
             options.lua_snippets.push_back(argv[++i]);
+        } else if (arg == "--control" && has_value) {
+            const std::string port = argv[++i];
+            const auto parsed = std::from_chars(port.data(), port.data() + port.size(), options.control_port);
+            if (parsed.ec != std::errc() || parsed.ptr != port.data() + port.size() || options.control_port < 0 || options.control_port > 65535) {
+                RefuseCommandLine("--control needs a port, 0 to 65535");
+            }
         } else if (arg == "--start-floor" && has_value) {
             options.start_floor = argv[++i];
         } else if (arg == "--street-offer" && has_value) {
@@ -5280,6 +5293,29 @@ int RunViewer(App& app, pt::Vfs& vfs) {
     return 0;
 }
 
+/* The control channel (docs/control.md): listens on 127.0.0.1:port and writes the port and a new token to control.json
+   next to pt.log, a file only this user may read; RunGame removes it when the game ends. */
+bool StartControl(pt::ControlServer& server, const std::filesystem::path& file, int port) {
+    std::error_code error;
+    std::filesystem::remove(file, error);
+    const std::string token = pt::ControlServer::NewToken();
+    if (!server.Start(port, token, pt::game::control::Info(pt::update::CurrentVersion()))) {
+        return false;
+    }
+    std::ofstream(file, std::ios::binary).close();
+    std::filesystem::permissions(file, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, error);
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    out << "{\"port\": " << server.Port() << ", \"token\": \"" << token << "\", \"pid\": " << pt::os::ProcessId() << "}\n";
+    out.close();
+    if (!out) {
+        pt::LogError("control: cannot write {}; the channel stays off", file.string());
+        server.Stop();
+        return false;
+    }
+    pt::LogInfo("control: listening on 127.0.0.1:{}; port and token in {}", server.Port(), file.string());
+    return true;
+}
+
 int RunGame(App& app, pt::Vfs& vfs) {
     const Options& options = app.options;
     pt::game::Game game(vfs, *app.models);
@@ -5307,6 +5343,15 @@ int RunGame(App& app, pt::Vfs& vfs) {
     if (!app.settings_path.empty()) game.Speedrun().SetRecordDirectory(std::filesystem::absolute(app.settings_path).parent_path());
     app.livesplit.Configure(app.settings.extras.livesplit, app.settings.extras.livesplit_host, app.settings.extras.livesplit_port);
     game.Speedrun().SetLiveSplit(&app.livesplit);
+    pt::ControlServer control;
+    std::filesystem::path control_file;
+    if (options.control_port >= 0 || (app.settings.extras.control && !options.headless)) {
+        const int port = options.control_port > 0 ? options.control_port : app.settings.extras.control_port;
+        const std::filesystem::path file = (g_output_dir.empty() ? std::filesystem::path(".") : g_output_dir) / "control.json";
+        if (StartControl(control, file, port)) {
+            control_file = file;
+        }
+    }
     uint32_t unlocks_seen = 0;
     if (game.SavesEnabled()) {
         auto& progress = app.settings.progress;
@@ -6708,6 +6753,11 @@ int RunGame(App& app, pt::Vfs& vfs) {
                 if (!app.settings_path.empty()) pt::SaveAppSettings(app.settings_path, app.settings);
             }
         }
+        if (control.Listening()) {
+            control.Poll([&](std::string_view line) { return pt::game::control::Run(game, line); });
+        }
+        // the held camera's own motion (control channel, PtDebug): once per drawn frame, with the frame's time
+        pt::game::debug::StepCamera(game, dt);
         if (game.SavesEnabled() && (game.BrowseUnlockGeneration() != unlocks_seen || game.ArchiveGeneration() != archive_seen)) {
             unlocks_seen = game.BrowseUnlockGeneration();
             archive_seen = game.ArchiveGeneration();
@@ -7623,6 +7673,11 @@ int RunGame(App& app, pt::Vfs& vfs) {
     app.fg_job.Cancel();
     controller_speaker.Close();
     input.Shutdown();
+    control.Stop();
+    if (!control_file.empty()) {
+        std::error_code error;
+        std::filesystem::remove(control_file, error);
+    }
     if (script.Expectations() > 0) {
         pt::LogInfo("input script: {} expectations, {} failed", script.Expectations(), script.Failures());
     }

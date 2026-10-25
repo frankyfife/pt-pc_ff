@@ -250,6 +250,23 @@ public:
     void SetMirrorViewportBit(int bit, bool on);
     uint32_t MirrorViewportBits() const { return mirror_viewport_bits_; }
     GameParameters& Parameters() { return parameters_; }
+    /* What the debug functions (PtDebug, docs/lua_api.md) changed: the exposure override (an unset value keeps the
+       floor's own), the flashlight values before the first change, and whether they hold the camera. */
+    struct DebugState {
+        std::optional<float> min_ev;
+        std::optional<float> max_ev;
+        std::optional<float> ev_compensation;
+        std::optional<HandyLightParameters> handy_light_default;
+        bool camera = false;
+        // the held camera's own motion (debug::StepCamera, once per drawn frame): metres per second along the view, its
+        // level right and the world's up, radians per second of yaw and pitch; follow is the offset to the player's eye
+        // in the eye's right, up and forward while the camera follows the player
+        glm::vec3 camera_velocity{0.0f};
+        float camera_yaw_rate = 0.0f;
+        float camera_pitch_rate = 0.0f;
+        std::optional<glm::vec3> camera_follow;
+    };
+    DebugState& Debug() { return debug_; }
     void CallBgm(std::string_view event);
     void StopBgm(std::string_view event);
     bool IsPlayingBgm(std::string_view event) const;
@@ -541,6 +558,7 @@ private:
     int lighting_row_ = 0;
     uint32_t mirror_viewport_bits_ = 0;
     GameParameters parameters_;
+    DebugState debug_;
     SaveStore save_store_;
     uint32_t save_io_count_ = 0;
     bool save_io_loading_ = false;

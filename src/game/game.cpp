@@ -294,7 +294,8 @@ void Game::Update(float dt, const InputState& pad_input) {
             if (!exit_door_control) player_.DemoHeldFrame(input);
         }
         if (!demo_control) {
-            player_.Update(dt, input, collision_, context);
+            static const InputState kNoInput;
+            player_.Update(dt, player_.takes_input ? input : kNoInput, collision_, context);
             zoom_fell_ = zoom_fell_ || player_.ZoomFalling();
         }
         if (zoom_fell_ && game_frame_tick_) {
